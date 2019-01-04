@@ -23,21 +23,24 @@ function NoteBox(key, onClick) {
 	this.onClick = onClick || function () {};
 
 	// Plays the audio associated with this NoteBox
-	this.play = function () {
+	this.play = function() {return new Promise(function (resolve) {
 		playing++;
 		// Always play from the beginning of the file.
 		audioEl.currentTime = 0;
-		audioEl.play();
-
-		// Set active class for NOTE_DURATION time
-		boxEl.classList.add('active');
-		setTimeout(function () {
-			playing--
-			if (!playing) {
-				boxEl.classList.remove('active');
+		audioEl.play().then(function() {
+			if(enabled) {
+				boxEl.classList.add('active');
 			}
-		}, NOTE_DURATION)
-	}
+
+			setTimeout(function () {
+				playing--
+				if (!playing && enabled) {
+					boxEl.classList.remove('active');
+				}
+				resolve(); 
+			}, NOTE_DURATION)
+		});	// Set active class for NOTE_DURATION time
+	})}
 
 	// Enable this NoteBox
 	this.enable = function () {
@@ -51,10 +54,12 @@ function NoteBox(key, onClick) {
 
 	// Call this NoteBox's clickHandler and play the note.
 	this.clickHandler = function () {
+		var that = this;
 		if (!enabled) return;
 
-		this.onClick(this.key)
-		this.play()
+		this.play().then(function() {that.onClick(that.key)});
+	
+
 	}.bind(this)
 
 	boxEl.addEventListener('mousedown', this.clickHandler);
@@ -66,11 +71,77 @@ function NoteBox(key, onClick) {
 // clicking the corresponding boxes on the page will play the NoteBox's audio.
 // It will also demonstrate programmatically playing notes by calling play directly.
 var notes = {};
+var currKey;
+var keys_played = [];
+var keys_to_be_played;
+var random;
+
+function checkKey(key) {
+	console.log('key', key);
+	if(key !== currKey) {
+		console.log('end');
+		keys_played = [];
+		return simon();
+	} 
+
+	currKey = keys_to_be_played.shift();
+	console.log('currkey', currKey);
+
+	if(currKey == undefined) 
+		setTimeout(simon(), NOTE_DURATION * 2);
+}
+
 
 KEYS.forEach(function (key) {
-	notes[key] = new NoteBox(key);
+	notes[key] = new NoteBox(key, checkKey);
 });
 
-KEYS.concat(KEYS.slice().reverse()).forEach(function(key, i) {
+/*KEYS.concat(KEYS.slice().reverse()).forEach(function(key, i) {
 	setTimeout(notes[key].play.bind(null, key), i * NOTE_DURATION);
-});
+}); */
+
+
+function simon() {
+	random = Math.floor(Math.random() * 4);
+	keys_played.push(KEYS[random]); 
+
+	function playSeq() {
+		for(var key in notes){
+			notes[key].disable();
+		}
+
+		return new Promise(function(resolve) {
+			keys_played.forEach(function(key, i) {
+			console.log(key);
+			setTimeout(function() {
+				notes[key].play().then(function() {
+					if(i == (keys_played.length -1))
+					resolve()
+				});
+
+				
+				}, i * NOTE_DURATION);
+			
+			})
+		})
+			
+	
+	}
+
+	playSeq().then(afterSeq); 
+
+	function afterSeq () {
+		for(var key in notes){
+			notes[key].enable();
+		}
+
+		keys_to_be_played = keys_played.slice(0); // copy the array 
+		console.log('keys_played', keys_played);
+	
+		currKey = keys_to_be_played.shift();
+		console.log('currkey', currKey);
+	}	
+}
+
+
+simon(); 
